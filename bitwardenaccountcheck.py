@@ -6,7 +6,7 @@ import requests
 import argparse
 
 
-parser = argparse.ArgumentParser("bitwardena ccount check")
+parser = argparse.ArgumentParser("bitwarden account check")
 parser.add_argument("filename", help="bitwarden json export", type=str)
 args = parser.parse_args()
 
@@ -43,7 +43,7 @@ for item in bitwardendata["items"]:
         for potentialpasswordmatch in potentialpasswordmatchs.splitlines():
 
             potentialpasswordmatch = potentialpasswordmatch.split(":")[0]
-            #API only returns sufex readding prefex
+            #API only returns suffix reading prefix
             potentialpasswordmatch = first5ofhash + potentialpasswordmatch
             if passwordhash == potentialpasswordmatch:
                 breachedaccount = dict()

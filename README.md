@@ -1,4 +1,4 @@
-# Bitwarden-account-check
+# Bitwarden-account-checker
 
 This tool is meant to quickly check a bitwarden vault passwords against the Have I Been Pwned password database.
 
