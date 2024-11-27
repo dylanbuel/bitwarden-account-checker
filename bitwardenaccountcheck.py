@@ -8,6 +8,8 @@ import argparse
 
 parser = argparse.ArgumentParser("bitwarden account check")
 parser.add_argument("filename", help="bitwarden json export", type=str)
+parser.add_argument("--showpasswords", help="when printing breached accounts include passwords in print", action="store_true")
+
 args = parser.parse_args()
 
 file = open(args.filename, "r")
@@ -59,5 +61,8 @@ for item in bitwardendata["items"]:
 
 print("Breached accounts")
 for account in breachedaccounts:
+    printstring = "Breached: " + account["name"] + " user: " + account["username"]
+    if (args.showpasswords):
+        printstring = printstring + " Password: " + account["password"]
 
-    print("Breached: " + account["name"] + " user: " + account["username"] + " Password: " + account["password"])
+    print(printstring)
