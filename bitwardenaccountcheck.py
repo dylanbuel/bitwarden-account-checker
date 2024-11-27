@@ -6,7 +6,7 @@ import requests
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 
-def checkaccount(item):
+def checkaccount(item) -> None:
     if (("login" in item ) and not (item["login"]["password"] == None)):
             if "username" in item["login"]:
                 username = item["login"]["username"]
@@ -36,6 +36,7 @@ def checkaccount(item):
                     breachedaccount["username"] = username
                     breachedaccount["name"] = name
                     return (breachedaccount)
+
 def checkaccounts(threadcount, items) -> list:
     breachedaccounts = list()
     with ThreadPoolExecutor(max_workers=threadcount) as executor:
@@ -48,18 +49,24 @@ def checkaccounts(threadcount, items) -> list:
             if result != None:
                 breachedaccounts.append(result)
     return breachedaccounts
-if __name__ =="__main__":
-    threadcount = 25
-    
-    # get args
+
+def parseargs() -> argparse:
     parser = argparse.ArgumentParser("bitwarden account check")
     parser.add_argument("filename", help="bitwarden json export", type=str)
     parser.add_argument("--showpasswords", help="when printing breached accounts include passwords in print", action="store_true")
+    parser.add_argument("--threadcount", type=int, default=25, help="Number of workers (default: 25)")
+
     args = parser.parse_args()
-    file = open(args.filename, "r")
-    bitwardendata = json.load(file)
-    file.close()
-    breachedaccounts = checkaccounts(threadcount, bitwardendata["items"])
+    return args
+
+if __name__ =="__main__":
+    args = parseargs()
+
+    with open(args.filename, "r") as file:
+        bitwardendata = json.load(file)
+
+    breachedaccounts = checkaccounts(args.threadcount, bitwardendata["items"])
+
     #print account info
     print("Breached accounts")
     for account in breachedaccounts:
