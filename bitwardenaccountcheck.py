@@ -4,65 +4,73 @@ import json
 import hashlib
 import requests
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 
-
-parser = argparse.ArgumentParser("bitwarden account check")
-parser.add_argument("filename", help="bitwarden json export", type=str)
-parser.add_argument("--showpasswords", help="when printing breached accounts include passwords in print", action="store_true")
-
-args = parser.parse_args()
-
-file = open(args.filename, "r")
-bitwardendata = json.load(file)
-file.close()
-
-
-breachedaccounts = []
-for item in bitwardendata["items"]:
+def checkaccount(item) -> None:
     if (("login" in item ) and not (item["login"]["password"] == None)):
-        if "username" in item["login"]:
-            username = item["login"]["username"]
-        else:
-            username = " "
-        #edge case where the user name field is there but there is no value in it.
-        if username == None: username = " "
-        if "name" in item:
-            name = item["name"]
-        else:
-            name = " "
+            if "username" in item["login"]:
+                username = item["login"]["username"]
+            else:
+                username = " "
+            #edge case where the user name field is there but there is no value in it.
+            if username == None: username = " "
+            if "name" in item:
+                name = item["name"]
+            else:
+                name = " "
+            password = item["login"]["password"]
+            passwordhash = hashlib.sha1(str(password).encode("utf-8")).hexdigest()
+            #API returns in all caps. 
+            passwordhash = passwordhash.upper()
+            # needs first 5 https://haveibeenpwned.com/API/v3#PwnedPasswords
+            first5ofhash = passwordhash[:5]
+            potentialpasswordmatchs = requests.get("https://api.pwnedpasswords.com/range/" + first5ofhash)
+            potentialpasswordmatchs = potentialpasswordmatchs.content.decode("utf-8")
+            for potentialpasswordmatch in potentialpasswordmatchs.splitlines():
+                potentialpasswordmatch = potentialpasswordmatch.split(":")[0]
+                #API only returns suffix reading prefix
+                potentialpasswordmatch = first5ofhash + potentialpasswordmatch
+                if passwordhash == potentialpasswordmatch:
+                    breachedaccount = dict()
+                    breachedaccount["password"] = password
+                    breachedaccount["username"] = username
+                    breachedaccount["name"] = name
+                    return (breachedaccount)
 
-        password = item["login"]["password"]
+def checkaccounts(threadcount, items) -> list:
+    breachedaccounts = list()
+    with ThreadPoolExecutor(max_workers=threadcount) as executor:
+        futures = []
+        for item in items:
+            future = executor.submit(checkaccount, item)
+            futures.append(future)
+        for future in futures:
+            result = future.result()
+            if result != None:
+                breachedaccounts.append(result)
+    return breachedaccounts
 
+def parseargs() -> argparse:
+    parser = argparse.ArgumentParser("bitwarden account check")
+    parser.add_argument("filename", help="bitwarden json export", type=str)
+    parser.add_argument("--showpasswords", help="when printing breached accounts include passwords in print", action="store_true")
+    parser.add_argument("--threadcount", type=int, default=25, help="Number of workers (default: 25)")
 
-        passwordhash = hashlib.sha1(str(password).encode("utf-8")).hexdigest()
-        #API returns in all caps. 
-        passwordhash = passwordhash.upper()
-        # needs first 5 https://haveibeenpwned.com/API/v3#PwnedPasswords
-        first5ofhash = passwordhash[:5]
-        potentialpasswordmatchs = requests.get("https://api.pwnedpasswords.com/range/" + first5ofhash)
-        potentialpasswordmatchs = potentialpasswordmatchs.content.decode("utf-8")
+    args = parser.parse_args()
+    return args
 
-        for potentialpasswordmatch in potentialpasswordmatchs.splitlines():
+if __name__ =="__main__":
+    args = parseargs()
 
-            potentialpasswordmatch = potentialpasswordmatch.split(":")[0]
-            #API only returns suffix reading prefix
-            potentialpasswordmatch = first5ofhash + potentialpasswordmatch
-            if passwordhash == potentialpasswordmatch:
-                breachedaccount = dict()
-                breachedaccount["password"] = password
-                breachedaccount["username"] = username
-                breachedaccount["name"] = name
+    with open(args.filename, "r") as file:
+        bitwardendata = json.load(file)
 
+    breachedaccounts = checkaccounts(args.threadcount, bitwardendata["items"])
 
-                breachedaccounts.append(breachedaccount)
-                
-        print(name + ": " + username + " checked")
-        
-
-print("Breached accounts")
-for account in breachedaccounts:
-    printstring = "Breached: " + account["name"] + " user: " + account["username"]
-    if (args.showpasswords):
-        printstring = printstring + " Password: " + account["password"]
-
-    print(printstring)
+    #print account info
+    print("Breached accounts")
+    for account in breachedaccounts:
+        printstring = "Breached: " + account["name"] + " user: " + account["username"]
+        if (args.showpasswords):
+            printstring = printstring + " Password: " + account["password"]
+        print(printstring)
